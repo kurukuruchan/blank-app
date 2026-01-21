@@ -1,6 +1,3 @@
-streamlit
-streamlit-japan-map
-pandas
 import streamlit as st
 from streamlit_japan_map import map_japan
 import pandas as pd
