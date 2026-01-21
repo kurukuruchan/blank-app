@@ -1,7 +1,6 @@
 import streamlit as st
-from streamlit_japan_map import map_japan
+import pandas as pd
 from datetime import date
-import io
 
 # ページ設定
 st.set_page_config(page_title="日本旅行記アプリ", layout="wide")
@@ -21,67 +20,62 @@ PREFECTURES = [
     "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
 ]
 
-st.title("🗾 日本旅行の思い出マップ")
+st.title("🗾 日本旅行の思い出ログ")
 
 # サイドバー：入力フォーム
 with st.sidebar:
     st.header("✈️ 新しい旅行を記録")
     with st.form("travel_form", clear_on_submit=True):
-        selected_pref = st.selectbox("都道府県", PREFECTURES)
+        selected_pref = st.selectbox("都道府県を選択", PREFECTURES)
         travel_date = st.date_input("日付", date.today())
         comment = st.text_area("思い出（食事、観光スポットなど）")
         uploaded_file = st.file_uploader("写真", type=['jpg', 'jpeg', 'png'])
         
-        submitted = st.form_submit_button("記録を保存")
-        if submitted:
-            # 画像の処理（BytesIOを使ってメモリ上に保持）
-            img_display = None
-            if uploaded_file is not None:
-                img_display = uploaded_file.getvalue()
-
+        if st.form_submit_button("記録を保存"):
+            img_data = uploaded_file.getvalue() if uploaded_file else None
             new_log = {
                 "prefecture": selected_pref,
                 "date": travel_date,
                 "comment": comment,
-                "image": img_display
+                "image": img_data
             }
             st.session_state.travel_logs.append(new_log)
+            st.success(f"{selected_pref}の思い出を保存しました！")
             st.rerun()
 
-# メインレイアウト
-col_map, col_info = st.columns([1.2, 1])
+# メインエリア
+# 訪問済みリストの作成
+visited_prefs = list(set([log["prefecture"] for log in st.session_state.travel_logs]))
 
-with col_map:
-    st.subheader("🗺️ 日本地図")
-    # 訪問済みの都道府県を抽出
-    visited_prefs = list(set([log["prefecture"] for log in st.session_state.travel_logs]))
-    # 訪問済みは青(#1f77b4)、未訪問は薄いグレー
-    colors = {pref: "#1f77b4" for pref in visited_prefs}
+# 上部にステータス表示
+st.write(f"### 🌏 現在の制覇状況: {len(visited_prefs)} / 47 都道府県")
+st.progress(len(visited_prefs) / 47)
+
+# 表示切り替え
+tab1, tab2 = st.tabs(["📍 場所から探す", "📜 全ての履歴"])
+
+with tab1:
+    # 都道府県を選択して表示（地図の代わりにセレクトボックスを使用）
+    target_pref = st.selectbox("表示したい都道府県を選んでください", ["未選択"] + PREFECTURES)
     
-    # 地図を表示し、クリックされた都道府県を取得
-    clicked_pref = map_japan(colors=colors)
-
-with col_info:
-    # フィルタリング
-    if clicked_pref:
-        st.subheader(f"📍 {clicked_pref} の思い出")
-        filtered_logs = [log for log in st.session_state.travel_logs if log["prefecture"] == clicked_pref]
-        
+    if target_pref != "未選択":
+        filtered_logs = [log for log in st.session_state.travel_logs if log["prefecture"] == target_pref]
         if not filtered_logs:
-            st.info(f"{clicked_pref} の記録はまだありません。")
+            st.info(f"{target_pref} の記録はまだありません。")
         else:
             for log in reversed(filtered_logs):
                 with st.container(border=True):
-                    st.caption(f"📅 {log['date']}")
+                    st.subheader(f"{log['date']} の思い出")
                     if log["image"]:
                         st.image(log["image"], use_container_width=True)
                     st.write(log["comment"])
+
+with tab2:
+    if not st.session_state.travel_logs:
+        st.write("まだ記録がありません。")
     else:
-        st.subheader("📸 最近の思い出")
-        if not st.session_state.travel_logs:
-            st.info("左のサイドバーから最初の旅行を記録しましょう！")
-        else:
-            st.write("地図をクリックすると、その場所の思い出に絞り込めます。")
-            # 直近3件を表示
-            for log in reversed(st.session_state.travel_logs[-3:]):
-                st.text(f"📍 {log['prefecture']} ({log['date']})")
+        for log in reversed(st.session_state.travel_logs):
+            with st.expander(f"{log['date']} - {log['prefecture']}"):
+                if log["image"]:
+                    st.image(log["image"], use_container_width=True)
+                st.write(log["comment"])
