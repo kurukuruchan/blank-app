@@ -19,21 +19,25 @@ PREFECTURES = ["北海道", "青森県", "岩手県", "宮城県", "秋田県", 
 
 st.title("🗾 日本旅行の思い出 DB")
 
-# --- データの読み込み ---
+# --- データの読み込み (仕様変更に対応した書き方) ---
 def get_travel_logs():
-    return conn.query("*", table="travel_logs", ttl="0s").execute()
+    # .query() ではなく .table().select() を使用します
+    return conn.table("travel_logs").select("*").execute()
 
-response = get_travel_logs()
-logs_df = response.data if response.data else []
+try:
+    response = get_travel_logs()
+    logs_df = response.data if response.data else []
+except Exception as e:
+    st.error(f"データの取得に失敗しました。テーブルが作成されているか確認してください: {e}")
+    logs_df = []
 
-# --- サイドバー：入力フォーム (書き込み処理) ---
+# --- サイドバー：入力フォーム ---
 with st.sidebar:
     st.header("✈️ 旅行を記録する")
     with st.form("travel_form", clear_on_submit=True):
         pref = st.selectbox("都道府県", PREFECTURES)
         v_date = st.date_input("日付", date.today())
         comm = st.text_area("思い出メモ")
-        # ※画像は本来Storageが必要ですが、課題のシンプル化のため今回はテキスト(URL)のみ対応
         img_url = st.text_input("画像のURL (任意)")
         
         if st.form_submit_button("Supabaseに保存"):
@@ -43,9 +47,9 @@ with st.sidebar:
                 "comment": comm,
                 "image_url": img_url
             }
-            # データベースへの書き込み
+            # 書き込み処理
             conn.table("travel_logs").insert(new_data).execute()
-            st.success("データベースに書き込みました！")
+            st.success("データベースに保存しました！")
             st.rerun()
 
 # --- メイン表示 ---
@@ -61,12 +65,12 @@ with tab1:
     for log in reversed(display_logs):
         with st.container(border=True):
             st.subheader(f"{log['prefecture']} ({log['visit_date']})")
-            if log["image_url"]:
+            if log.get("image_url"):
                 st.image(log["image_url"], use_container_width=True)
-            st.write(log["comment"])
+            st.write(log.get("comment", ""))
 
 with tab2:
     if not logs_df:
-        st.info("データがありません。")
+        st.info("データがまだありません。")
     else:
-        st.table([{"日付": d["visit_date"], "都道府県": d["prefecture"], "メモ": d["comment"]} for d in logs_df])
+        st.dataframe(logs_df) # 課題用にテーブル形式で全表示
