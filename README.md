@@ -26,6 +26,17 @@
 </ul>
 
 <br>
+<p align="center">
+  <a href="https://blank-app-7vq2io2174g.streamlit.app/" target="_blank">
+    <img src="https://img.shields.io/badge/🚀%20アプリを今すぐ試す-Open%20App-blue?style=for-the-badge&logo=streamlit" alt="Open App" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://blank-app-7vq2io2174g.streamlit.app/">https://blank-app-7vq2io2174g.streamlit.app/#db
+</p>
+
+<hr>
 
 ## 🚀 使い方
 <ol>
