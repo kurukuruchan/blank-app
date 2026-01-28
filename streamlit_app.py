@@ -3,74 +3,91 @@ from st_supabase_connection import SupabaseConnection
 from datetime import date
 
 # ページ設定
-st.set_page_config(page_title="日本旅行記 (Supabase版)", layout="wide")
+st.set_page_config(page_title="日本旅行思い出ログ Pro", layout="wide", page_icon="🗾")
 
 # Supabase 接続
 conn = st.connection("supabase", type=SupabaseConnection)
 
 # 都道府県リスト
-PREFECTURES = ["北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
-               "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
-               "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県",
-               "静岡県", "愛知県", "三重県", "滋賀県", "京都府", "大阪府", "兵庫県",
-               "奈良県", "和歌山県", "鳥取県", "島根県", "岡山県", "広島県", "山口県",
-               "徳島県", "香川県", "愛媛県", "高知県", "福岡県", "佐賀県", "長崎県",
-               "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"]
+PREFECTURES = [
+    "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
+    "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
+    "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県",
+    "静岡県", "愛知県", "三重県", "滋賀県", "京都府", "大阪府", "兵庫県",
+    "奈良県", "和歌山県", "鳥取県", "島根県", "岡山県", "広島県", "山口県",
+    "徳島県", "香川県", "愛媛県", "高知県", "福岡県", "佐賀県", "長崎県",
+    "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
+]
 
-st.title("🗾 日本旅行の思い出 DB")
+st.title("🗾 日本旅行思い出ログ Pro")
+st.markdown("Supabaseに保存されるため、アプリが休止しても記録は消えません。")
 
-# --- データの読み込み (仕様変更に対応した書き方) ---
-def get_travel_logs():
-    # .query() ではなく .table().select() を使用します
-    return conn.table("travel_logs").select("*").execute()
+# --- データの取得 (キャッシュなしで最新を取得) ---
+def load_data():
+    try:
+        response = conn.table("travel_logs").select("*").execute()
+        return response.data
+    except Exception as e:
+        st.error(f"データの読み込みに失敗しました: {e}")
+        return []
 
-try:
-    response = get_travel_logs()
-    logs_df = response.data if response.data else []
-except Exception as e:
-    st.error(f"データの取得に失敗しました。テーブルが作成されているか確認してください: {e}")
-    logs_df = []
+logs = load_data()
 
-# --- サイドバー：入力フォーム ---
+# --- サイドバー：新規登録 ---
 with st.sidebar:
-    st.header("✈️ 旅行を記録する")
+    st.header("✈️ 旅行を記録")
     with st.form("travel_form", clear_on_submit=True):
-        pref = st.selectbox("都道府県", PREFECTURES)
-        v_date = st.date_input("日付", date.today())
-        comm = st.text_area("思い出メモ")
-        img_url = st.text_input("画像のURL (任意)")
+        pref = st.selectbox("行った都道府県", PREFECTURES)
+        travel_date = st.date_input("日付", date.today())
+        comment = st.text_area("思い出（食べたもの、行った場所など）")
+        img_url = st.text_input("写真のURL (GoogleフォトやWeb上の画像リンク)")
         
-        if st.form_submit_button("Supabaseに保存"):
-            new_data = {
+        submitted = st.form_submit_button("Supabaseに保存")
+        if submitted:
+            new_log = {
                 "prefecture": pref,
-                "visit_date": str(v_date),
-                "comment": comm,
+                "visit_date": str(travel_date),
+                "comment": comment,
                 "image_url": img_url
             }
-            # 書き込み処理
-            conn.table("travel_logs").insert(new_data).execute()
-            st.success("データベースに保存しました！")
+            conn.table("travel_logs").insert(new_log).execute()
+            st.success(f"{pref} の記録を保存しました！")
             st.rerun()
 
-# --- メイン表示 ---
-visited_count = len(set([d["prefecture"] for d in logs_df]))
-st.metric("制覇した都道府県", f"{visited_count} / 47")
+# --- メインエリアの構成 ---
+# 1. 統計情報の表示
+visited_prefs = list(set([log["prefecture"] for log in logs]))
+col1, col2, col3 = st.columns(3)
+col1.metric("訪れた都道府県数", f"{len(visited_prefs)} / 47")
+col2.metric("総旅行回数", f"{len(logs)} 回")
+col3.progress(len(visited_prefs) / 47, text="日本制覇の進捗")
 
-tab1, tab2 = st.tabs(["📍 場所から探す", "📜 タイムライン"])
+# 2. 地図ライクなリスト表示とフィルタリング
+tab_map, tab_history = st.tabs(["📍 場所から振り返る", "📜 全履歴"])
 
-with tab1:
-    target = st.selectbox("都道府県で絞り込む", ["全て"] + PREFECTURES)
-    display_logs = logs_df if target == "全て" else [d for d in logs_df if d["prefecture"] == target]
+with tab_map:
+    target_pref = st.selectbox("表示する都道府県を選択", ["(未選択)"] + PREFECTURES)
     
-    for log in reversed(display_logs):
-        with st.container(border=True):
-            st.subheader(f"{log['prefecture']} ({log['visit_date']})")
-            if log.get("image_url"):
-                st.image(log["image_url"], use_container_width=True)
-            st.write(log.get("comment", ""))
+    if target_pref != "(未選択)":
+        filtered_logs = [l for l in logs if l["prefecture"] == target_pref]
+        if not filtered_logs:
+            st.warning(f"{target_pref} の記録はまだありません。")
+        else:
+            for log in reversed(filtered_logs):
+                with st.container(border=True):
+                    st.subheader(f"📅 {log['visit_date']}")
+                    if log["image_url"]:
+                        st.image(log["image_url"], caption=f"{target_pref}での一枚", use_container_width=True)
+                    st.write(log["comment"])
 
-with tab2:
-    if not logs_df:
-        st.info("データがまだありません。")
+with tab_history:
+    if not logs:
+        st.info("まだ記録がありません。サイドバーから登録してください。")
     else:
-        st.dataframe(logs_df) # 課題用にテーブル形式で全表示
+        # 表形式で全データを表示
+        st.dataframe(logs, use_container_width=True)
+
+# 3. おまけ：訪問済みの県をテキストで一覧表示
+st.divider()
+st.subheader("🏁 訪問済みリスト")
+st.write(", ".join(visited_prefs) if visited_prefs else "まだありません")
