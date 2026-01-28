@@ -1,16 +1,15 @@
 import streamlit as st
 from st_supabase_connection import SupabaseConnection
-import plotly.express as px
-import pandas as pd
 from datetime import date
+from streamlit_japan_map import map_japan # 新しくインポート
 
 # ページ設定
-st.set_page_config(page_title="日本旅行思い出マップ", layout="wide")
+st.set_set_page_config(page_title="日本旅行思い出マップ", layout="wide", page_icon="🗾")
 
 # Supabase 接続
 conn = st.connection("supabase", type=SupabaseConnection)
 
-# 都道府県リスト（JISコード順など、地図データとの紐付け用）
+# 都道府県リスト
 PREFECTURES = [
     "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
     "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
@@ -21,69 +20,93 @@ PREFECTURES = [
     "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
 ]
 
-# --- データの取得 ---
+st.title("🗾 日本旅行思い出マップ (Supabase永続版)")
+st.markdown("Supabaseに保存されるため、アプリが休止しても記録は消えません。")
+
+# --- データの取得 (キャッシュなしで最新を取得) ---
 def load_data():
-    response = conn.table("travel_logs").select("*").execute()
-    return response.data
+    try:
+        response = conn.table("travel_logs").select("*").execute()
+        return response.data
+    except Exception as e:
+        st.error(f"データの読み込みに失敗しました。テーブルが作成されているか、Secretsが正しいか確認してください: {e}")
+        return []
 
 logs = load_data()
 visited_prefs = list(set([log["prefecture"] for log in logs]))
 
-# --- タイトル ---
-st.title("🗾 日本旅行思い出マップ (Supabase永続版)")
-
-# --- サイドバー：入力 ---
+# --- サイドバー：新規登録 ---
 with st.sidebar:
     st.header("✈️ 旅行を記録")
-    with st.form("add_form", clear_on_submit=True):
-        pref = st.selectbox("都道府県", PREFECTURES)
-        v_date = st.date_input("日付", date.today())
-        comm = st.text_area("思い出")
-        img = st.text_input("画像URL")
-        if st.form_submit_button("保存"):
-            conn.table("travel_logs").insert({
-                "prefecture": pref, "visit_date": str(v_date), "comment": comm, "image_url": img
-            }).execute()
+    with st.form("travel_form", clear_on_submit=True):
+        pref = st.selectbox("行った都道府県", PREFECTURES)
+        travel_date = st.date_input("日付", date.today())
+        comment = st.text_area("思い出（食べたもの、行った場所など）")
+        img_url = st.text_input("写真のURL (GoogleフォトやWeb上の画像リンク)")
+        
+        submitted = st.form_submit_button("Supabaseに保存")
+        if submitted:
+            new_log = {
+                "prefecture": pref,
+                "visit_date": str(travel_date),
+                "comment": comment,
+                "image_url": img_url
+            }
+            conn.table("travel_logs").insert(new_log).execute()
+            st.success(f"{pref} の記録を保存しました！")
             st.rerun()
 
-# --- メインレイアウト ---
+# --- メインエリアの構成 ---
 col_map, col_detail = st.columns([1.5, 1])
 
 with col_map:
     st.subheader("🗺️ 訪問状況")
     
-    # 地図データ用のDataFrame作成
-    # 訪問済みは1、未訪問は0として数値化
-    df_map = pd.DataFrame({
-        "prefecture": PREFECTURES,
-        "visited": [1 if p in visited_prefs else 0 for p in PREFECTURES]
-    })
-
-    # Plotlyによる簡易日本地図（擬似的なヒートマップ）
-    # ※本来はGeoJSONが必要ですが、ここでは訪問数を可視化する簡単なチャートを作成
-    fig = px.choropleth(
-        df_map,
-        geojson="https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/master/2_bundeslaender/1_sehr_hoch.geo.json", # 日本のGeoJSONが必要
-        locations="prefecture",
-        color="visited",
-        color_continuous_scale=["#eeeeee", "#1f77b4"], # 未訪問はグレー、訪問済みは青
-        range_color=[0, 1],
-        labels={'visited':'訪問済み'}
-    )
+    # 訪問済みの都道府県に色を付けるための辞書を作成
+    # 訪問済みは濃い青、未訪問は薄いグレー
+    colors = {pref: "#1f77b4" if pref in visited_prefs else "#cccccc" for pref in PREFECTURES}
     
-    # より確実に動く「棒グラフによる進捗確認」を併設
-    st.write(f"現在の制覇数: {len(visited_prefs)} / 47")
-    st.bar_chart(df_map.set_index("prefecture"))
+    # streamlit-japan-map を使って日本地図を描画
+    # クリックされた都道府県を受け取る
+    clicked_pref = map_japan(colors=colors, width=500) # widthで地図のサイズを調整
+    
+    st.info(f"現在、**{len(visited_prefs)} / 47** 都道府県を制覇しています！")
 
 with col_detail:
     st.subheader("📸 思い出フィード")
-    target = st.selectbox("県別フィルタ", ["全て"] + PREFECTURES)
+
+    # 地図がクリックされたら、その都道府県で絞り込む
+    # クリックされていない場合は全てのオプションを表示
+    current_selection = clicked_pref if clicked_pref else "(全て表示)"
     
-    display_logs = logs if target == "全て" else [l for l in logs if l["prefecture"] == target]
+    # セレクトボックスのデフォルト値を、クリックされた都道府県に設定
+    target_pref_options = ["(全て表示)"] + PREFECTURES
+    selected_index = 0
+    if current_selection in target_pref_options:
+        selected_index = target_pref_options.index(current_selection)
+
+    target_pref_display = st.selectbox(
+        "都道府県で絞り込む", 
+        options=target_pref_options, 
+        index=selected_index,
+        key="pref_filter_selectbox" # キーを追加してwidgetの警告を回避
+    )
     
-    for l in reversed(display_logs):
-        with st.container(border=True):
-            st.write(f"**{l['prefecture']}** ({l['visit_date']})")
-            if l.get("image_url"):
-                st.image(l["image_url"], use_container_width=True)
-            st.write(l["comment"])
+    # 絞り込みロジック
+    if target_pref_display == "(全て表示)":
+        display_logs = logs
+        st.caption("全ての旅行記録を表示しています。")
+    else:
+        display_logs = [l for l in logs if l["prefecture"] == target_pref_display]
+        st.caption(f"{target_pref_display} の旅行記録を表示しています。")
+
+    if not display_logs:
+        st.warning(f"{target_pref_display} の記録はまだありません。")
+    else:
+        # 最新の記録から表示
+        for log in reversed(display_logs):
+            with st.container(border=True):
+                st.write(f"**{log['prefecture']}** - 📅 {log['visit_date']}")
+                if log["image_url"]:
+                    st.image(log["image_url"], caption="思い出の写真", use_container_width=True)
+                st.write(log["comment"])
