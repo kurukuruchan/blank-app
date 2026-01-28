@@ -16,16 +16,6 @@
 本アプリケーションは、日本国内の旅行の思い出を都道府県ごとに記録・管理できるツールです。
 最大の特徴は、バックエンドに <b>Supabase (PostgreSQL)</b> を採用している点です。これにより、従来の簡易データベース（SQLite3等）とは異なり、サーバーが休止してもデータが失われない<b>完全な永続化</b>を実現しています。
 
-<br>
-
-## 📺 デモ
-<p align="center">
-  <img src="https://via.placeholder.com/800x450.png?text=App+Screenshot+Here" width="800px" />
-  <br>
-  <i>※ここに実際のアプリのスクリーンショットを配置してください</i>
-</p>
-
-<br>
 
 ## ✨ 主な機能
 <ul>
@@ -48,15 +38,10 @@
 
 ## 🛠 実行環境・設定
 
-### 1. 使用技術
+###使用技術
 | カテゴリ | 技術 |
 | :--- | :--- |
 | **Language** | Python 3.11 |
 | **Frontend** | Streamlit |
 | **Database** | Supabase (PostgreSQL) |
 
-### 2. 環境変数（Secrets）
-Streamlit Cloudの管理画面で以下の設定が必要です。
-```toml
-SUPABASE_URL = "YOUR_SUPABASE_PROJECT_URL"
-SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY"
