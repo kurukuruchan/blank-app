@@ -30,7 +30,7 @@ def load_data():
 logs = load_data()
 visited_prefs = list(set([log["prefecture"] for log in logs]))
 
-st.title("🗾 日本旅行思い出マップ (Supabase版)")
+st.title("🗾 日本旅行思い出マップ")
 
 # --- サイドバー：入力 ---
 with st.sidebar:
